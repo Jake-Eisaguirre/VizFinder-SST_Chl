@@ -1,0 +1,225 @@
+---
+title: "VizFinder"
+author: "Jake Eisaguirre"
+date: "10/15/2021"
+output: html_document
+---
+
+```{r setup, include = FALSE, collapse = TRUE, class.source = 'fold-hide'}
+knitr::opts_chunk$set(echo = T)
+
+library(here)
+library(tidyverse) 
+library(raster)
+library(colorRamps)
+library(colorspace)
+library(rgdal)
+library(magick)
+library(sf)
+
+```
+
+
+# Read in SST and Chloro
+```{r}
+# NASA MUIR data with multiple sensors
+date <- as.Date(Sys.time()) -2
+  
+date <- as.Date(date) %>% 
+  paste0("T12:00:00Z")
+
+past_date <- as.Date(date) -1 
+
+past_date <- as.Date(past_date) %>% 
+  paste0("T12:00:00Z") 
+
+url <- paste0("https://thredds.jpl.nasa.gov/thredds/ncss/OceanTemperature/MUR-JPL-L4-GLOB-v4.1.nc?var=analysed_sst&north=34.75&west=-121.4&east=-118.4&south=33.55&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=", past_date, "&time_end=", date, "&timeStride=1&addLatLon=true")
+
+download.file(url, here("data", "sst.nc"))
+
+sst_ras <- here("data", "sst.nc")
+
+
+
+# 3 day chl composite from aqua modis - might want to choose 8 day for clarity. 
+chl_date <- as.Date(Sys.time()) -3
+
+chl_date <- as.Date(chl_date) %>% 
+  paste0("T12:00:00Z") 
+
+chl_past_date <- as.Date(chl_date) -10 
+
+chl_past_date <- as.Date(chl_past_date) %>% 
+  paste0("T12:00:00Z") 
+
+url <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date,")%5D%5B(0.0)%5D%5B(33.55):(34.75)%5D%5B(-121.4):(-118.4)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+
+download.file(url, here("data", "chl.nc"))
+
+chl_ras <- here("data","chl.nc")
+
+```
+
+# Read in Shape Files
+```{r}
+cha <- read_sf(here("data","shape", "channel_islands.shp")) %>% 
+  mutate(geometry = st_transform(geometry, 4326)) %>% 
+  filter(!NAME %in% c("Santa Catalina", "San Clemente"))
+
+ca <- read_sf(here("data","shape","s_11au16", "s_11au16.shp")) %>% 
+  mutate(geometry = st_transform(geometry, 4326)) %>% 
+  filter(NAME == "California")
+
+
+merged_shapes_mask <- bind_rows(ca, cha)
+
+rm(cha, ca)
+gc()
+
+```
+
+# Color Palletes
+```{r}
+
+chl_pal <- colorspace::sequential_hcl(25,
+  h = c(300, 75), c = c(35, 95), l = c(15, 90), power = c(0.8, 1.2))
+
+sst_pal <- matlab.like(100)
+
+```
+
+# Create SST Rasters 
+```{r}
+sst_res <- c(0.001, 0.001) 
+
+ras_sst <- raster(sst_ras)
+
+ras_sst <- ((9/5) * (ras_sst$analysed.sea.surface.temperature - 273) + 32)
+
+
+new_ras_sst <- raster(xmn = -121.4,
+                      xmx = -118.4,
+                      ymn = 33.55,
+                      ymx = 34.75,
+                      res = sst_res)
+
+
+re_samp_sst <- resample(ras_sst, new_ras_sst, method = "bilinear")
+
+cropped_sst <- mask(re_samp_sst, merged_shapes_mask, inverse = T)
+
+final_re_samp_sst <- projectRaster(cropped_sst, crs = 3857) #final re-sammpled SST raster
+
+rm(ras_sst, new_ras_sst, re_samp_sst, cropped_sst)
+gc()
+
+```
+
+# Create Chloro Raster
+``` {r}
+chl_res <- c(0.001, 0.001) 
+
+ras_chl <- raster(chl_ras, col = chl_pal)
+
+ras_chl <- abs(log(ras_chl$Concentration.Of.Chlorophyll.In.Sea.Water))
+
+new_ras_chl <- raster(xmn = -121.4,
+                      xmx = -118.4,
+                      ymn = 33.55,
+                      ymx = 34.75,
+                      res = chl_res)
+
+re_samp_chl <- resample(ras_chl, new_ras_chl, method = "bilinear")
+
+
+cropped_chl <- mask(re_samp_chl, merged_shapes_mask, inverse = T)
+
+re_samp_chl <- projectRaster(cropped_chl, crs = 3857) #final re-sampled Chloro raster
+
+rm(ras_chl, new_ras_chl, cropped_chl, merged_shapes_mask)
+gc()
+```
+
+# Add pal to Raster and Save as png
+```{r}
+#sst_plot
+sst_df <- as.data.frame(rasterToPoints(final_re_samp_sst))
+
+sst_rgb <- ggplot() +
+  geom_tile(data = sst_df, aes(x = x, y = y, fill = analysed.sea.surface.temperature)) +
+  coord_sf(datum = 3857, expand = T) +
+  scale_fill_gradientn(colors  = sst_pal) +
+  theme_classic() +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none",
+          panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        plot.background=element_blank(),
+        plot.margin=unit(c(0,0,0,0), "null"))
+
+#variable to adjust saved sst resolution
+sst_dpi <- c(245)
+
+ggsave(here("pngs", "old", "sst.png"), dpi = sst_dpi, bg = "transparent")
+
+sst_png <- image_read(here("pngs", "old", "sst.png"))
+
+final_sst_png <- image_trim(sst_png) %>% 
+  image_transparent("white")
+
+image_write(final_sst_png, here("pngs", "site_ready", "final_sst.png"))
+
+```
+
+```{r}
+# Chloro plot
+chl_df <- as.data.frame(rasterToPoints(re_samp_chl))
+
+chl_rgb <- ggplot() +
+  geom_tile(data = chl_df, aes(x = x, y = y, fill = layer)) +
+  scale_fill_gradientn(colors  = chl_pal) +
+  theme_classic() +
+  coord_sf(datum = 3857) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none",
+          panel.background=element_blank(),panel.border=element_blank(),
+          panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),plot.background=element_blank(),
+        plot.margin=unit(c(0,0,0,0), "null"))
+
+#variable to adjust saved chl resolution
+chl_dpi <- c(245)
+
+ggsave(here("pngs", "old", "chl.png"), dpi = chl_dpi, bg = "transparent")
+
+chl_png <- image_read(here("pngs", "old", "chl.png"))
+
+final_chl_png <- image_trim(chl_png) %>% 
+  image_transparent("white")
+
+image_write(final_chl_png, here("pngs", "site_ready", "final_chl.png"))
+
+```
+
+```{r}
+#Legend info
+
+sst_legend <- matrix(c(min(sst_df$analysed.sea.surface.temperature), max(sst_df$analysed.sea.surface.temperature)))
+rownames(sst_legend) <- c('min', 'max')
+write.table(sst_legend, file = here("legend_info", "sst_legend.txt"))
+
+chl_legend <- matrix(c(0, max(chl_df$layer)))
+rownames(chl_legend) <- c('min', 'max')
+write.table(chl_legend, file = here("legend_info", "chl_legend.txt"))
+
+rm(sst_df, chl_df)
+gc()
+
+```
+
