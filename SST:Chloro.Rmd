@@ -16,6 +16,7 @@ library(colorspace)
 library(rgdal)
 library(magick)
 library(sf)
+library(scales)
 
 ```
 
@@ -33,7 +34,7 @@ past_date <- as.Date(date) -1
 past_date <- as.Date(past_date) %>% 
   paste0("T12:00:00Z") 
 
-url <- paste0("https://thredds.jpl.nasa.gov/thredds/ncss/OceanTemperature/MUR-JPL-L4-GLOB-v4.1.nc?var=analysed_sst&north=34.75&west=-121.4&east=-118.4&south=33.55&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=", past_date, "&time_end=", date, "&timeStride=1&addLatLon=true")
+url <- paste0("https://thredds.jpl.nasa.gov/thredds/ncss/OceanTemperature/MUR-JPL-L4-GLOB-v4.1.nc?var=analysed_sst&north=34.75&west=-121.4&east=-117.06&south=32.36&disableLLSubset=on&disableProjSubset=on&horizStride=1&time_start=", past_date, "&time_end=", date, "&timeStride=1&addLatLon=true")
 
 download.file(url, here("data", "sst.nc"))
 
@@ -52,7 +53,7 @@ chl_past_date <- as.Date(chl_date) -10
 chl_past_date <- as.Date(chl_past_date) %>% 
   paste0("T12:00:00Z") 
 
-url <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date,")%5D%5B(0.0)%5D%5B(33.55):(34.75)%5D%5B(-121.4):(-118.4)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+url <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
 
 download.file(url, here("data", "chl.nc"))
 
@@ -63,8 +64,7 @@ chl_ras <- here("data","chl.nc")
 # Read in Shape Files
 ```{r}
 cha <- read_sf(here("data","shape", "channel_islands.shp")) %>% 
-  mutate(geometry = st_transform(geometry, 4326)) %>% 
-  filter(!NAME %in% c("Santa Catalina", "San Clemente"))
+  mutate(geometry = st_transform(geometry, 4326))
 
 ca <- read_sf(here("data","shape","s_11au16", "s_11au16.shp")) %>% 
   mutate(geometry = st_transform(geometry, 4326)) %>% 
@@ -81,7 +81,7 @@ gc()
 # Color Palletes
 ```{r}
 
-chl_pal <- colorspace::sequential_hcl(25,
+chl_pal <- colorspace::sequential_hcl(100,
   h = c(300, 75), c = c(35, 95), l = c(15, 90), power = c(0.8, 1.2))
 
 sst_pal <- matlab.like(100)
@@ -98,8 +98,8 @@ ras_sst <- ((9/5) * (ras_sst$analysed.sea.surface.temperature - 273) + 32)
 
 
 new_ras_sst <- raster(xmn = -121.4,
-                      xmx = -118.4,
-                      ymn = 33.55,
+                      xmx = -117.06,
+                      ymn = 32.36,
                       ymx = 34.75,
                       res = sst_res)
 
@@ -124,8 +124,8 @@ ras_chl <- raster(chl_ras, col = chl_pal)
 ras_chl <- abs(log(ras_chl$Concentration.Of.Chlorophyll.In.Sea.Water))
 
 new_ras_chl <- raster(xmn = -121.4,
-                      xmx = -118.4,
-                      ymn = 33.55,
+                      xmx = -117.06,
+                      ymn = 32.36,
                       ymx = 34.75,
                       res = chl_res)
 
@@ -162,14 +162,15 @@ sst_rgb <- ggplot() +
         plot.margin=unit(c(0,0,0,0), "null"))
 
 #variable to adjust saved sst resolution
-sst_dpi <- c(245)
+sst_dpi <- c(215)
 
 ggsave(here("pngs", "old", "sst.png"), dpi = sst_dpi, bg = "transparent")
 
 sst_png <- image_read(here("pngs", "old", "sst.png"))
 
 final_sst_png <- image_trim(sst_png) %>% 
-  image_transparent("white")
+  image_transparent("white") %>% 
+  image_convert(antialias = F)
 
 image_write(final_sst_png, here("pngs", "site_ready", "final_sst.png"))
 
@@ -194,14 +195,15 @@ chl_rgb <- ggplot() +
         plot.margin=unit(c(0,0,0,0), "null"))
 
 #variable to adjust saved chl resolution
-chl_dpi <- c(245)
+chl_dpi <- c(225)
 
 ggsave(here("pngs", "old", "chl.png"), dpi = chl_dpi, bg = "transparent")
 
 chl_png <- image_read(here("pngs", "old", "chl.png"))
 
 final_chl_png <- image_trim(chl_png) %>% 
-  image_transparent("white")
+  image_transparent("white") %>% 
+  image_convert(antialias = T)
 
 image_write(final_chl_png, here("pngs", "site_ready", "final_chl.png"))
 
@@ -211,11 +213,13 @@ image_write(final_chl_png, here("pngs", "site_ready", "final_chl.png"))
 #Legend info
 
 sst_legend <- matrix(c(min(sst_df$analysed.sea.surface.temperature), max(sst_df$analysed.sea.surface.temperature)))
-rownames(sst_legend) <- c('min', 'max')
+rownames(sst_legend) <- c("min", "max")
+colnames(sst_legend) <- c("SST")
 write.table(sst_legend, file = here("legend_info", "sst_legend.txt"))
 
 chl_legend <- matrix(c(0, max(chl_df$layer)))
 rownames(chl_legend) <- c('min', 'max')
+colnames(chl_legend) <- c('Chl')
 write.table(chl_legend, file = here("legend_info", "chl_legend.txt"))
 
 rm(sst_df, chl_df)
