@@ -42,22 +42,27 @@ sst_ras <- here("data", "sst.nc")
 
 
 
-# 3 day chl composite from aqua modis - might want to choose 8 day for clarity. 
-chl_date <- as.Date(Sys.time()) -3
+# 3 day chl composite from aqua modis and 8 day for clarity. 
+chl_date_8 <- as.Date(Sys.time()) -5
 
-chl_date <- as.Date(chl_date) %>% 
+chl_date_3 <- as.Date(Sys.time()) -3
+
+chl_date_8 <- as.Date(chl_date_8) %>% 
   paste0("T12:00:00Z") 
 
-chl_past_date <- as.Date(chl_date) -10 
-
-chl_past_date <- as.Date(chl_past_date) %>% 
+chl_data_3 <- as.Date(chl_date_3) %>% 
   paste0("T12:00:00Z") 
 
-url <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
 
-download.file(url, here("data", "chl.nc"))
+url_8 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla8day_LonPM180.nc?chlorophyll%5B(", chl_date_8,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
 
-chl_ras <- here("data","chl.nc")
+url_3 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date_8,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+
+download.file(url_8, here("data", "chl_8.nc"))
+download.file(url_3, here("data", "chl_3.nc"))
+
+chl_ras_8 <- here("data","chl_8.nc")
+chl_ras_3 <- here("data","chl_3.nc")
 
 ```
 
@@ -119,9 +124,11 @@ gc()
 ``` {r}
 chl_res <- c(0.001, 0.001) 
 
-ras_chl <- raster(chl_ras, col = chl_pal)
+ras_chl_8 <- raster(chl_ras_8)
+ras_chl_3 <- raster(chl_ras_3)
+ras_chl <- raster::merge(ras_chl_8, ras_chl_3)
 
-ras_chl <- abs(log(ras_chl$Concentration.Of.Chlorophyll.In.Sea.Water))
+ras_chl <- abs(log(ras_chl$layer))
 
 new_ras_chl <- raster(xmn = -121.4,
                       xmx = -117.06,
@@ -136,7 +143,7 @@ cropped_chl <- mask(re_samp_chl, merged_shapes_mask, inverse = T)
 
 re_samp_chl <- projectRaster(cropped_chl, crs = 3857) #final re-sampled Chloro raster
 
-rm(ras_chl, new_ras_chl, cropped_chl, merged_shapes_mask)
+rm(ras_chl, new_ras_chl, cropped_chl, merged_shapes_mask, ras_chl_3, ras_chl_8)
 gc()
 ```
 
@@ -195,7 +202,7 @@ chl_rgb <- ggplot() +
         plot.margin=unit(c(0,0,0,0), "null"))
 
 #variable to adjust saved chl resolution
-chl_dpi <- c(225)
+chl_dpi <- c(215)
 
 ggsave(here("pngs", "old", "chl.png"), dpi = chl_dpi, bg = "transparent")
 
