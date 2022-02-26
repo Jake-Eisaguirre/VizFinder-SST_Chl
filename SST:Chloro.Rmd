@@ -43,7 +43,7 @@ sst_ras <- here("data", "sst.nc")
 
 
 # 3 day chl composite from aqua modis and 8 day for clarity. 
-chl_date_8 <- as.Date(Sys.time()) -5
+chl_date_8 <- as.Date(Sys.time()) -7
 
 chl_date_3 <- as.Date(Sys.time()) -3
 
@@ -126,7 +126,7 @@ chl_res <- c(0.001, 0.001)
 
 ras_chl_8 <- raster(chl_ras_8)
 ras_chl_3 <- raster(chl_ras_3)
-ras_chl <- raster::merge(ras_chl_8, ras_chl_3)
+ras_chl <- raster::merge(ras_chl_3, ras_chl_8)
 
 ras_chl <- abs(log(ras_chl$layer))
 
