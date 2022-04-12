@@ -43,20 +43,20 @@ sst_ras <- here("data", "sst.nc")
 
 
 # 3 day chl composite from aqua modis and 8 day for clarity. 
-chl_date_8 <- as.Date(Sys.time()) -5
+chl_date_8 <- as.Date(Sys.time()) -4
 
-chl_date_3 <- as.Date(Sys.time()) -3
+chl_date_3 <- as.Date(Sys.time()) -2
 
-chl_date_8 <- as.Date(chl_date_8) %>% 
-  paste0("T12:00:00Z") 
+chl_date_8 <- as.Date(chl_date_8)
 
-chl_date_3 <- as.Date(chl_date_3) %>% 
-  paste0("T12:00:00Z") 
+chl_date_3 <- as.Date(chl_date_3) 
 
 
-url_8 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla8day_LonPM180.nc?chlorophyll%5B(", chl_date_8,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
 
-url_3 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMWchla3day_LonPM180.nc?chlorophyll%5B(", chl_date_3,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchlorophyll&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+url_8 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdVHNchla8day.nc?chla%5B(", chl_date_8,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchla&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+
+url_3 <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdVHNchla3day.nc?chla%5B(", chl_date_3,")%5D%5B(0.0)%5D%5B(32.35):(34.75)%5D%5B(-121.4):(-117.06)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cchla&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff")
+
 
 download.file(url_8, here("data", "chl_8.nc"))
 download.file(url_3, here("data", "chl_3.nc"))
@@ -126,7 +126,7 @@ gc()
 ``` {r}
 chl_res <- c(0.001, 0.001) 
 
-ras_chl <- raster(chl_ras_8)
+ras_chl_8 <- raster(chl_ras_8)
 ras_chl_3 <- raster(chl_ras_3)
 ras_chl <- raster::merge(ras_chl_3, ras_chl_8)
 
